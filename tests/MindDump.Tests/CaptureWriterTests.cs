@@ -31,9 +31,8 @@ public sealed class CaptureWriterTests : IDisposable
         string path = await _writer.AppendAsync(_directory, "First captured thought", At(27, 14, 32), cancellationToken);
 
         string content = await File.ReadAllTextAsync(path, cancellationToken);
-        Assert.Equal(
-            "# Mind Dump - May 2026\n\n## 2026-05-27\n- `14:32` First captured thought\n",
-            content);
+        Assert.StartsWith("# Mind Dump - May 2026\n\n## 2026-05-27\n%% minddump:entry id=", content, StringComparison.Ordinal);
+        Assert.EndsWith(" %%\n- `14:32` First captured thought\n", content, StringComparison.Ordinal);
         Assert.True(Directory.Exists(Path.Combine(_directory, "Calendar", "Monthly")));
     }
 
@@ -46,7 +45,8 @@ public sealed class CaptureWriterTests : IDisposable
 
         string content = await File.ReadAllTextAsync(path, cancellationToken);
         Assert.Equal(1, CountOccurrences(content, "## 2026-05-27"));
-        Assert.Contains("- `08:00` First\n- `09:15` Second\n", content, StringComparison.Ordinal);
+        Assert.Contains("- `08:00` First\n", content, StringComparison.Ordinal);
+        Assert.Contains("- `09:15` Second\n", content, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -57,7 +57,8 @@ public sealed class CaptureWriterTests : IDisposable
         await _writer.AppendAsync(_directory, "New day", At(28, 0, 5), cancellationToken);
 
         string content = await File.ReadAllTextAsync(path, cancellationToken);
-        Assert.EndsWith("\n## 2026-05-28\n- `00:05` New day\n", content, StringComparison.Ordinal);
+        Assert.Contains("\n## 2026-05-28\n%% minddump:entry id=", content, StringComparison.Ordinal);
+        Assert.EndsWith(" %%\n- `00:05` New day\n", content, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -116,6 +117,57 @@ public sealed class CaptureWriterTests : IDisposable
 
         Assert.Contains("changed after this capture", exception.Message, StringComparison.Ordinal);
         Assert.Contains("External edit", await File.ReadAllTextAsync(token.FilePath, cancellationToken), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task GetRecentAsync_ReturnsTaggedEntriesNewestFirstAcrossMonthlyNotes()
+    {
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        await _writer.AppendAsync(_directory, "Older", At(27, 8, 0), cancellationToken);
+        await _writer.AppendAsync(_directory, "Newer\nwith detail", At(28, 9, 15), cancellationToken);
+
+        IReadOnlyList<CaptureEntry> entries = await _writer.GetRecentAsync(_directory, cancellationToken: cancellationToken);
+
+        Assert.Equal(["Newer\nwith detail", "Older"], entries.Select(entry => entry.Text));
+        Assert.All(entries, entry => Assert.Equal(32, entry.Id.Length));
+    }
+
+    [Fact]
+    public async Task UpdateAndDeleteEntryAsync_TargetEntryByIdentifier()
+    {
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        await _writer.AppendAsync(_directory, "Keep", At(27, 8, 0), cancellationToken);
+        await _writer.AppendAsync(_directory, "Change", At(27, 9, 15), cancellationToken);
+        CaptureEntry changed = (await _writer.GetRecentAsync(_directory, cancellationToken: cancellationToken))[0];
+
+        await _writer.UpdateEntryAsync(changed, "Updated\ntext", cancellationToken);
+        CaptureEntry updated = (await _writer.GetRecentAsync(_directory, cancellationToken: cancellationToken))[0];
+        Assert.Equal("Updated\ntext", updated.Text);
+        Assert.Equal(changed.Id, updated.Id);
+
+        await _writer.DeleteEntryAsync(updated, cancellationToken);
+        IReadOnlyList<CaptureEntry> remaining = await _writer.GetRecentAsync(_directory, cancellationToken: cancellationToken);
+        Assert.Single(remaining);
+        Assert.Equal("Keep", remaining[0].Text);
+    }
+
+    [Fact]
+    public async Task MigrateLegacyMarkersAsync_UsesObsidianNativeCommentsAndKeepsEntryReadable()
+    {
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        string folder = _writer.GetMonthlyFolderPath(_directory);
+        Directory.CreateDirectory(folder);
+        string path = _writer.GetMonthlyFilePath(_directory, At(27, 8, 0));
+        await File.WriteAllTextAsync(path,
+            "# Mind Dump - May 2026\n\n## 2026-05-27\n<!-- minddump:entry id=0123456789abcdef0123456789abcdef captured=2026-05-27T08:00:00.0000000+07:00 -->\n- `08:00` Legacy\n",
+            cancellationToken);
+
+        await _writer.MigrateLegacyMarkersAsync(_directory, cancellationToken);
+
+        string content = await File.ReadAllTextAsync(path, cancellationToken);
+        Assert.DoesNotContain("<!-- minddump:entry", content, StringComparison.Ordinal);
+        Assert.Contains("%% minddump:entry id=0123456789abcdef0123456789abcdef captured=2026-05-27T08:00:00.0000000+07:00 %%", content, StringComparison.Ordinal);
+        Assert.Equal("Legacy", (await _writer.GetRecentAsync(_directory, cancellationToken: cancellationToken)).Single().Text);
     }
 
     public void Dispose()

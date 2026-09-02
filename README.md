@@ -9,7 +9,9 @@ MindDump is a Windows tray utility for capturing thoughts into monthly Markdown 
 - In quick capture mode, press `Enter` to save or `Shift+Enter` for another line.
 - Switch to writing mode in Settings to use `Ctrl+Enter` to save.
 - Each entry is appended to `Calendar\Monthly\yyyy-MM Mind Dump.md` under a daily heading.
-- Undo the most recent capture from the capture window or tray menu. Undo history lasts for the current app session.
+- Review the 10 most recent tagged captures, edit or remove one, copy it back into the capture box, or open its monthly note.
+- New entries include stable identifiers in Obsidian-native `%%` comments, hidden in Reading View and Live Preview. Older MindDump HTML markers are migrated automatically.
+- Undo the most recent capture from the capture window or tray menu. The tray undo remains limited to the current app session.
 
 ## Build
 

@@ -34,7 +34,7 @@ public sealed partial class MainWindow : Window
 
         nint windowHandle = WindowNative.GetWindowHandle(this);
         _appWindow = AppWindow.GetFromWindowId(Microsoft.UI.Win32Interop.GetWindowIdFromWindow(windowHandle));
-        _appWindow.Resize(new Windows.Graphics.SizeInt32(540, 360));
+        _appWindow.Resize(new Windows.Graphics.SizeInt32(720, 560));
         _appWindow.Title = "MindDump";
         _appWindow.Closing += AppWindow_Closing;
 
@@ -74,6 +74,7 @@ public sealed partial class MainWindow : Window
     private void ShowCapture()
     {
         Activate();
+        _ = RefreshRecentCapturesAsync();
         CaptureTextBox.Focus(FocusState.Programmatic);
     }
 
@@ -133,6 +134,7 @@ public sealed partial class MainWindow : Window
             _lastCapture = await _writer.AppendWithUndoAsync(_settings.VaultFolderPath, capturedText, DateTimeOffset.Now);
             _lastCaptureText = capturedText;
             UndoButton.IsEnabled = true;
+            await RefreshRecentCapturesAsync();
             CaptureTextBox.Text = string.Empty;
             StatusText.Text = string.Empty;
             HideCapture();
@@ -237,6 +239,7 @@ public sealed partial class MainWindow : Window
         UpdateModeText();
         ApplyHotkey();
         StatusText.Text = "Settings saved.";
+        await RefreshRecentCapturesAsync();
     }
 
     private async Task<string?> PickFolderAsync()
@@ -341,12 +344,130 @@ public sealed partial class MainWindow : Window
             UndoButton.IsEnabled = false;
             ShowCapture();
             StatusText.Text = "Last capture undone. The text is ready to edit or capture again.";
+            await RefreshRecentCapturesAsync();
         }
         catch (Exception exception)
         {
             ShowCapture();
             StatusText.Text = $"Could not undo the last capture: {exception.Message}";
         }
+    }
+
+    private async Task RefreshRecentCapturesAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_settings.VaultFolderPath))
+        {
+            RecentCapturesList.ItemsSource = null;
+            return;
+        }
+
+        try
+        {
+            await _writer.MigrateLegacyMarkersAsync(_settings.VaultFolderPath);
+            IReadOnlyList<CaptureEntry> entries = await _writer.GetRecentAsync(_settings.VaultFolderPath);
+            RecentCapturesList.ItemsSource = entries.Select(entry => new RecentCaptureItem(entry)).ToArray();
+        }
+        catch (Exception exception)
+        {
+            StatusText.Text = $"Could not load recent captures: {exception.Message}";
+        }
+    }
+
+    private void UseRecentButton_Click(object sender, RoutedEventArgs e)
+    {
+        if ((sender as Button)?.Tag is not CaptureEntry entry)
+        {
+            return;
+        }
+
+        CaptureTextBox.Text = entry.Text;
+        CaptureTextBox.SelectionStart = CaptureTextBox.Text.Length;
+        CaptureTextBox.Focus(FocusState.Programmatic);
+        StatusText.Text = "Copied to the capture box.";
+    }
+
+    private async void EditRecentButton_Click(object sender, RoutedEventArgs e)
+    {
+        if ((sender as Button)?.Tag is not CaptureEntry entry)
+        {
+            return;
+        }
+
+        TextBox editor = new() { Text = entry.Text, AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, MinHeight = 120 };
+        ContentDialog dialog = new()
+        {
+            Title = "Edit capture",
+            Content = editor,
+            PrimaryButtonText = "Save",
+            CloseButtonText = "Cancel",
+            XamlRoot = Content.XamlRoot
+        };
+
+        if (await dialog.ShowAsync() != ContentDialogResult.Primary)
+        {
+            return;
+        }
+
+        try
+        {
+            await _writer.UpdateEntryAsync(entry, editor.Text);
+            InvalidateSessionUndoFor(entry.FilePath);
+            await RefreshRecentCapturesAsync();
+            StatusText.Text = "Capture updated.";
+        }
+        catch (Exception exception)
+        {
+            StatusText.Text = $"Could not update the capture: {exception.Message}";
+        }
+    }
+
+    private async void DeleteRecentButton_Click(object sender, RoutedEventArgs e)
+    {
+        if ((sender as Button)?.Tag is not CaptureEntry entry)
+        {
+            return;
+        }
+
+        try
+        {
+            await _writer.DeleteEntryAsync(entry);
+            InvalidateSessionUndoFor(entry.FilePath);
+            await RefreshRecentCapturesAsync();
+            StatusText.Text = "Capture undone.";
+        }
+        catch (Exception exception)
+        {
+            StatusText.Text = $"Could not undo the capture: {exception.Message}";
+        }
+    }
+
+    private void OpenRecentButton_Click(object sender, RoutedEventArgs e)
+    {
+        if ((sender as Button)?.Tag is not CaptureEntry entry)
+        {
+            return;
+        }
+
+        try
+        {
+            _noteLauncher.Open(entry.FilePath);
+        }
+        catch (Exception exception)
+        {
+            StatusText.Text = $"Could not open the note: {exception.Message}";
+        }
+    }
+
+    private void InvalidateSessionUndoFor(string filePath)
+    {
+        if (_lastCapture is null || !string.Equals(_lastCapture.FilePath, filePath, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        _lastCapture = null;
+        _lastCaptureText = null;
+        UndoButton.IsEnabled = false;
     }
 
     private void ExitApplication()
@@ -387,4 +508,11 @@ public sealed partial class MainWindow : Window
         => string.IsNullOrWhiteSpace(vaultFolderPath)
             ? "No vault selected"
             : _writer.GetMonthlyFolderPath(vaultFolderPath);
+}
+
+public sealed class RecentCaptureItem(CaptureEntry entry)
+{
+    public CaptureEntry Entry { get; } = entry;
+    public string When { get; } = entry.CapturedAt.ToString("MMM d, HH:mm");
+    public string Preview { get; } = entry.Text.Replace('\n', ' ');
 }

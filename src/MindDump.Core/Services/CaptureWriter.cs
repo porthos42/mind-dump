@@ -43,7 +43,8 @@ public sealed partial class CaptureWriter
         bool fileCreated = !File.Exists(path);
         long previousLength = fileCreated ? 0 : new FileInfo(path).Length;
         string dailyHeader = $"## {capturedAt:yyyy-MM-dd}";
-        string formattedEntry = FormatEntry(normalizedText, capturedAt);
+        string entryId = Guid.NewGuid().ToString("N");
+        string formattedEntry = FormatStoredEntry(entryId, normalizedText, capturedAt);
 
         if (fileCreated)
         {
@@ -74,7 +75,59 @@ public sealed partial class CaptureWriter
         }
 
         byte[] resultingBytes = await File.ReadAllBytesAsync(path, cancellationToken);
-        return new CaptureUndoToken(path, previousLength, SHA256.HashData(resultingBytes), fileCreated);
+        return new CaptureUndoToken(path, previousLength, SHA256.HashData(resultingBytes), fileCreated, entryId);
+    }
+
+    public async Task<IReadOnlyList<CaptureEntry>> GetRecentAsync(
+        string vaultFolderPath,
+        int limit = 10,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(vaultFolderPath);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(limit);
+
+        string folder = GetMonthlyFolderPath(vaultFolderPath);
+        if (!Directory.Exists(folder))
+        {
+            return [];
+        }
+
+        List<CaptureEntry> entries = [];
+        foreach (string path in Directory.EnumerateFiles(folder, "????-?? Mind Dump.md").OrderByDescending(Path.GetFileName))
+        {
+            string content = await File.ReadAllTextAsync(path, cancellationToken);
+            entries.AddRange(ParseEntries(content, path));
+        }
+
+        return entries.OrderByDescending(entry => entry.CapturedAt).Take(limit).ToArray();
+    }
+
+    public Task DeleteEntryAsync(CaptureEntry entry, CancellationToken cancellationToken = default)
+        => ReplaceEntryAsync(entry, replacementText: null, cancellationToken);
+
+    public Task UpdateEntryAsync(CaptureEntry entry, string text, CancellationToken cancellationToken = default)
+        => ReplaceEntryAsync(entry, NormalizeText(text), cancellationToken);
+
+    public async Task MigrateLegacyMarkersAsync(string vaultFolderPath, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(vaultFolderPath);
+        string folder = GetMonthlyFolderPath(vaultFolderPath);
+        if (!Directory.Exists(folder))
+        {
+            return;
+        }
+
+        foreach (string path in Directory.EnumerateFiles(folder, "????-?? Mind Dump.md"))
+        {
+            string content = await File.ReadAllTextAsync(path, cancellationToken);
+            string updated = LegacyMarkerRegex().Replace(
+                content,
+                match => $"%% minddump:entry id={match.Groups["id"].Value} captured={match.Groups["captured"].Value} %%");
+            if (!string.Equals(content, updated, StringComparison.Ordinal))
+            {
+                await File.WriteAllTextAsync(path, updated, Utf8WithoutBom, cancellationToken);
+            }
+        }
     }
 
     public async Task UndoAsync(CaptureUndoToken token, CancellationToken cancellationToken = default)
@@ -115,6 +168,50 @@ public sealed partial class CaptureWriter
         return builder.ToString();
     }
 
+    private string FormatStoredEntry(string id, string text, DateTimeOffset capturedAt)
+        => $"%% minddump:entry id={id} captured={capturedAt:O} %%\n{FormatEntry(text, capturedAt)}";
+
+    private async Task ReplaceEntryAsync(CaptureEntry entry, string? replacementText, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(entry);
+        if (!File.Exists(entry.FilePath))
+        {
+            throw new InvalidOperationException("The note containing this capture no longer exists.");
+        }
+
+        string content = await File.ReadAllTextAsync(entry.FilePath, cancellationToken);
+        Match match = EntryRegex().Matches(content).Cast<Match>()
+            .FirstOrDefault(candidate => string.Equals(candidate.Groups["id"].Value, entry.Id, StringComparison.Ordinal))
+            ?? throw new InvalidOperationException("This capture could not be found. The note may have been edited.");
+
+        string replacement = replacementText is null
+            ? string.Empty
+            : FormatStoredEntry(entry.Id, replacementText, entry.CapturedAt) + "\n";
+        string updated = content.Remove(match.Index, match.Length).Insert(match.Index, replacement);
+        await File.WriteAllTextAsync(entry.FilePath, updated, Utf8WithoutBom, cancellationToken);
+    }
+
+    private static IEnumerable<CaptureEntry> ParseEntries(string content, string path)
+    {
+        foreach (Match match in EntryRegex().Matches(content))
+        {
+            if (!DateTimeOffset.TryParseExact(match.Groups["captured"].Value, "O", CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out DateTimeOffset capturedAt))
+            {
+                continue;
+            }
+
+            string firstLine = match.Groups["first"].Value;
+            string continuations = match.Groups["continuations"].Value;
+            string text = firstLine;
+            if (continuations.Length > 0)
+            {
+                text += "\n" + string.Join('\n', continuations.Split('\n', StringSplitOptions.RemoveEmptyEntries).Select(line => line[2..]));
+            }
+
+            yield return new CaptureEntry(match.Groups["id"].Value, text, capturedAt, path);
+        }
+    }
+
     private static string NormalizeText(string text)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(text);
@@ -125,10 +222,23 @@ public sealed partial class CaptureWriter
 
     [GeneratedRegex(@"^## \d{4}-\d{2}-\d{2}$", RegexOptions.Multiline | RegexOptions.CultureInvariant)]
     private static partial Regex DailyHeadingRegex();
+
+    [GeneratedRegex(@"^(?:%% minddump:entry id=(?<id>[a-f0-9]{32}) captured=(?<captured>[^ ]+) %%|<!-- minddump:entry id=(?<id>[a-f0-9]{32}) captured=(?<captured>[^ ]+) -->)\n- `\d{2}:\d{2}` (?<first>[^\n]*)(?<continuations>(?:\n  [^\n]*)*)\n", RegexOptions.Multiline | RegexOptions.CultureInvariant)]
+    private static partial Regex EntryRegex();
+
+    [GeneratedRegex(@"^<!-- minddump:entry id=(?<id>[a-f0-9]{32}) captured=(?<captured>[^ ]+) -->$", RegexOptions.Multiline | RegexOptions.CultureInvariant)]
+    private static partial Regex LegacyMarkerRegex();
 }
 
 public sealed record CaptureUndoToken(
     string FilePath,
     long PreviousLength,
     byte[] ResultingFileHash,
-    bool FileCreated);
+    bool FileCreated,
+    string EntryId);
+
+public sealed record CaptureEntry(
+    string Id,
+    string Text,
+    DateTimeOffset CapturedAt,
+    string FilePath);

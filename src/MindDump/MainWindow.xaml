@@ -6,8 +6,9 @@
     <Grid Padding="20" RowSpacing="12">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
-            <RowDefinition Height="*" />
+            <RowDefinition Height="140" />
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
@@ -37,7 +38,36 @@
             Foreground="{ThemeResource TextFillColorSecondaryBrush}"
             TextWrapping="Wrap" />
 
-        <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="10">
+        <Grid Grid.Row="3" RowSpacing="6">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+            <TextBlock Text="Recent captures" FontWeight="SemiBold" />
+            <ListView x:Name="RecentCapturesList" Grid.Row="1" SelectionMode="None">
+                <ListView.ItemTemplate>
+                    <DataTemplate>
+                        <Grid Padding="0,4" ColumnSpacing="6">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="72" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="{Binding When}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                            <TextBlock Grid.Column="1" Text="{Binding Preview}" TextTrimming="CharacterEllipsis" />
+                            <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="4">
+                                <Button Content="Use" Tag="{Binding Entry}" Click="UseRecentButton_Click" ToolTipService.ToolTip="Copy into capture box" />
+                                <Button Content="Edit" Tag="{Binding Entry}" Click="EditRecentButton_Click" />
+                                <Button Content="Undo" Tag="{Binding Entry}" Click="DeleteRecentButton_Click" />
+                                <Button Content="Open" Tag="{Binding Entry}" Click="OpenRecentButton_Click" />
+                            </StackPanel>
+                        </Grid>
+                    </DataTemplate>
+                </ListView.ItemTemplate>
+            </ListView>
+        </Grid>
+
+        <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="10">
             <Button x:Name="UndoButton" Content="Undo last" Click="UndoButton_Click" IsEnabled="False" />
             <Button Content="Hide" Click="HideButton_Click" />
             <Button x:Name="SaveButton" Content="Capture" Click="SaveButton_Click" Style="{StaticResource AccentButtonStyle}" />
