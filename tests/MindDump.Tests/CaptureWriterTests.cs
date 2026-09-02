@@ -1,0 +1,96 @@
+using MindDump.Services;
+
+namespace MindDump.Tests;
+
+public sealed class CaptureWriterTests : IDisposable
+{
+    private readonly string _directory = Path.Combine(Path.GetTempPath(), $"MindDumpTests-{Guid.NewGuid():N}");
+    private readonly CaptureWriter _writer = new();
+
+    [Fact]
+    public void GetMonthlyFileName_UsesSortableYearAndMonth()
+    {
+        Assert.Equal("2026-05 Mind Dump.md", _writer.GetMonthlyFileName(new DateTimeOffset(2026, 5, 31, 23, 59, 0, TimeSpan.Zero)));
+        Assert.Equal("2027-01 Mind Dump.md", _writer.GetMonthlyFileName(new DateTimeOffset(2027, 1, 1, 0, 0, 0, TimeSpan.Zero)));
+    }
+
+    [Fact]
+    public void GetMonthlyFilePath_StoresNotesInCalendarMonthlyBelowVaultRoot()
+    {
+        string path = _writer.GetMonthlyFilePath(_directory, At(27, 14, 32));
+
+        Assert.Equal(
+            Path.Combine(_directory, "Calendar", "Monthly", "2026-05 Mind Dump.md"),
+            path);
+    }
+
+    [Fact]
+    public async Task AppendAsync_CreatesMonthlyFileWithTitleDateAndEntry()
+    {
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        string path = await _writer.AppendAsync(_directory, "First captured thought", At(27, 14, 32), cancellationToken);
+
+        string content = await File.ReadAllTextAsync(path, cancellationToken);
+        Assert.Equal(
+            "# Mind Dump - May 2026\n\n## 2026-05-27\n- `14:32` First captured thought\n",
+            content);
+        Assert.True(Directory.Exists(Path.Combine(_directory, "Calendar", "Monthly")));
+    }
+
+    [Fact]
+    public async Task AppendAsync_AppendsSameDayEntriesWithoutAddingAnotherHeading()
+    {
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        string path = await _writer.AppendAsync(_directory, "First", At(27, 8, 0), cancellationToken);
+        await _writer.AppendAsync(_directory, "Second", At(27, 9, 15), cancellationToken);
+
+        string content = await File.ReadAllTextAsync(path, cancellationToken);
+        Assert.Equal(1, CountOccurrences(content, "## 2026-05-27"));
+        Assert.Contains("- `08:00` First\n- `09:15` Second\n", content, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task AppendAsync_AddsNewHeadingWhenCalendarDayChanges()
+    {
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        string path = await _writer.AppendAsync(_directory, "Before sleep", At(27, 23, 55), cancellationToken);
+        await _writer.AppendAsync(_directory, "New day", At(28, 0, 5), cancellationToken);
+
+        string content = await File.ReadAllTextAsync(path, cancellationToken);
+        Assert.EndsWith("\n## 2026-05-28\n- `00:05` New day\n", content, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void FormatEntry_IndentsMultilineContentAsMarkdownContinuation()
+    {
+        string formatted = _writer.FormatEntry("Line one\r\nLine two\nLine three", At(27, 14, 32));
+
+        Assert.Equal("- `14:32` Line one\n  Line two\n  Line three", formatted);
+    }
+
+    [Fact]
+    public async Task AppendAsync_RejectsWhitespaceOnlyContentWithoutWritingFile()
+    {
+        await Assert.ThrowsAsync<ArgumentException>(() => _writer.AppendAsync(
+            _directory,
+            " \r\n ",
+            At(27, 14, 32),
+            TestContext.Current.CancellationToken));
+
+        Assert.False(Directory.Exists(_directory));
+    }
+
+    public void Dispose()
+    {
+        if (Directory.Exists(_directory))
+        {
+            Directory.Delete(_directory, recursive: true);
+        }
+    }
+
+    private static DateTimeOffset At(int day, int hour, int minute)
+        => new(2026, 5, day, hour, minute, 0, TimeSpan.FromHours(7));
+
+    private static int CountOccurrences(string value, string needle)
+        => value.Split(needle, StringSplitOptions.None).Length - 1;
+}

@@ -1,0 +1,8 @@
+<Solution>
+  <Configurations>
+    <Platform Name="x64" />
+  </Configurations>
+  <Project Path="src/MindDump.Core/MindDump.Core.csproj" />
+  <Project Path="src/MindDump/MindDump.csproj" />
+  <Project Path="tests/MindDump.Tests/MindDump.Tests.csproj" />
+</Solution>
