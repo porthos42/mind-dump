@@ -75,6 +75,7 @@ public sealed class NativeMessageHost : IDisposable
     {
         nint menu = CreatePopupMenu();
         AppendMenu(menu, MenuString, (nuint)TrayCommand.Capture, "Capture");
+        AppendMenu(menu, MenuString, (nuint)TrayCommand.UndoLastCapture, "Undo Last Capture");
         AppendMenu(menu, MenuString, (nuint)TrayCommand.OpenCurrentNote, "Open Current Note");
         AppendMenu(menu, MenuString, (nuint)TrayCommand.Settings, "Settings");
         AppendMenu(menu, MenuSeparator, 0, null);

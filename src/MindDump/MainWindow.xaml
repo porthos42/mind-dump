@@ -38,6 +38,7 @@
             TextWrapping="Wrap" />
 
         <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="10">
+            <Button x:Name="UndoButton" Content="Undo last" Click="UndoButton_Click" IsEnabled="False" />
             <Button Content="Hide" Click="HideButton_Click" />
             <Button x:Name="SaveButton" Content="Capture" Click="SaveButton_Click" Style="{StaticResource AccentButtonStyle}" />
         </StackPanel>

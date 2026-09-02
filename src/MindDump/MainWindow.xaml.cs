@@ -22,6 +22,8 @@ public sealed partial class MainWindow : Window
     private readonly HotkeyService _hotkeyService;
     private readonly AppWindow _appWindow;
     private AppSettings _settings = new();
+    private CaptureUndoToken? _lastCapture;
+    private string? _lastCaptureText;
     private bool _isExiting;
 
     public MainWindow(SettingsService settingsService, CaptureWriter writer)
@@ -127,7 +129,10 @@ public sealed partial class MainWindow : Window
 
         try
         {
-            await _writer.AppendAsync(_settings.VaultFolderPath, CaptureTextBox.Text, DateTimeOffset.Now);
+            string capturedText = CaptureTextBox.Text;
+            _lastCapture = await _writer.AppendWithUndoAsync(_settings.VaultFolderPath, capturedText, DateTimeOffset.Now);
+            _lastCaptureText = capturedText;
+            UndoButton.IsEnabled = true;
             CaptureTextBox.Text = string.Empty;
             StatusText.Text = string.Empty;
             HideCapture();
@@ -265,6 +270,9 @@ public sealed partial class MainWindow : Window
             case TrayCommand.OpenCurrentNote:
                 OpenCurrentNote();
                 break;
+            case TrayCommand.UndoLastCapture:
+                await UndoLastCaptureAsync();
+                break;
             case TrayCommand.Settings:
                 ShowCapture();
                 await ShowSettingsAsync(requireFolder: false);
@@ -307,6 +315,38 @@ public sealed partial class MainWindow : Window
     private void HideButton_Click(object sender, RoutedEventArgs e)
     {
         HideCapture();
+    }
+
+    private async void UndoButton_Click(object sender, RoutedEventArgs e)
+    {
+        await UndoLastCaptureAsync();
+    }
+
+    private async Task UndoLastCaptureAsync()
+    {
+        if (_lastCapture is null)
+        {
+            ShowCapture();
+            StatusText.Text = "There is no capture to undo in this session.";
+            return;
+        }
+
+        try
+        {
+            await _writer.UndoAsync(_lastCapture);
+            CaptureTextBox.Text = _lastCaptureText ?? string.Empty;
+            CaptureTextBox.SelectionStart = CaptureTextBox.Text.Length;
+            _lastCapture = null;
+            _lastCaptureText = null;
+            UndoButton.IsEnabled = false;
+            ShowCapture();
+            StatusText.Text = "Last capture undone. The text is ready to edit or capture again.";
+        }
+        catch (Exception exception)
+        {
+            ShowCapture();
+            StatusText.Text = $"Could not undo the last capture: {exception.Message}";
+        }
     }
 
     private void ExitApplication()

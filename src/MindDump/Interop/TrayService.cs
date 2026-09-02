@@ -7,7 +7,8 @@ public enum TrayCommand
     Capture = 1001,
     OpenCurrentNote = 1002,
     Settings = 1003,
-    Exit = 1004
+    Exit = 1004,
+    UndoLastCapture = 1005
 }
 
 public sealed class TrayService(nint windowHandle) : IDisposable

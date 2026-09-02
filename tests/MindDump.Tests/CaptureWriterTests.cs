@@ -80,6 +80,44 @@ public sealed class CaptureWriterTests : IDisposable
         Assert.False(Directory.Exists(_directory));
     }
 
+    [Fact]
+    public async Task UndoAsync_RemovesCaptureFromExistingNote()
+    {
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        string path = await _writer.AppendAsync(_directory, "Keep this", At(27, 8, 0), cancellationToken);
+        string original = await File.ReadAllTextAsync(path, cancellationToken);
+        CaptureUndoToken token = await _writer.AppendWithUndoAsync(_directory, "Undo this", At(27, 9, 15), cancellationToken);
+
+        await _writer.UndoAsync(token, cancellationToken);
+
+        Assert.Equal(original, await File.ReadAllTextAsync(path, cancellationToken));
+    }
+
+    [Fact]
+    public async Task UndoAsync_DeletesNoteCreatedByCapture()
+    {
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        CaptureUndoToken token = await _writer.AppendWithUndoAsync(_directory, "Undo this", At(27, 9, 15), cancellationToken);
+
+        await _writer.UndoAsync(token, cancellationToken);
+
+        Assert.False(File.Exists(token.FilePath));
+    }
+
+    [Fact]
+    public async Task UndoAsync_RefusesToOverwriteChangesMadeAfterCapture()
+    {
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        CaptureUndoToken token = await _writer.AppendWithUndoAsync(_directory, "Captured", At(27, 9, 15), cancellationToken);
+        await File.AppendAllTextAsync(token.FilePath, "External edit\n", cancellationToken);
+
+        InvalidOperationException exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => _writer.UndoAsync(token, cancellationToken));
+
+        Assert.Contains("changed after this capture", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("External edit", await File.ReadAllTextAsync(token.FilePath, cancellationToken), StringComparison.Ordinal);
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(_directory))
