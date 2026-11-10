@@ -6,3 +6,6 @@ TestResults/
 .packages/
 restore.*.log
 artifacts/
+*.pfx
+*.p12
+*.key

@@ -32,6 +32,11 @@ WizardStyle=modern
 CloseApplications=no
 RestartApplications=no
 SetupMutex=MindDumpInstaller
+#ifdef DevelopmentSigning
+SignTool=mddevelopment
+SignedUninstaller=yes
+SignedUninstallerDir={#SigningCache}
+#endif
 
 [Tasks]
 Name: "desktopicon"; Description: "Create a &desktop shortcut"; Flags: unchecked

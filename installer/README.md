@@ -33,8 +33,13 @@ Outputs under `artifacts/installer-<version>/` are ignored by Git:
 - A unique `publish-...` directory containing the self-contained payload
 
 Verify the checksum with `Get-FileHash <installer.exe> -Algorithm SHA256`.
-The installer is unsigned; Windows may show an unknown publisher/SmartScreen
+For a combined portable ZIP, installer and checksum build, use
+`scripts/Build-Release.ps1`; see [distribution](../docs/distribution.md) for
+tag validation, draft automation and signing plans.
+By default the installer is unsigned; Windows may show an unknown publisher/SmartScreen
 warning. No certificate or release publication is part of this build process.
+Optional local self-signing signs the app, setup and uninstaller; see
+[self-signing](../docs/self-signing.md). It does not establish public trust.
 
 ## Upgrade, running applications, and data
 
@@ -106,3 +111,15 @@ uninstall, or clean-machine runtime success. Record those results separately.
   notes retained and retained settings loading after reinstall.
 - A true newer-version upgrade remains pending until the next release. The
   manual results above do not establish that distinct-version upgrade behavior.
+
+## Self-signed installer verification (2026-11-10)
+
+- User reported the local self-signed build succeeded after correcting detection
+  of Windows' untrusted-root signature result.
+- On another Windows PC, user confirmed installation over the existing 0.1.0
+  installation after exiting MindDump, successful launch, retained vault
+  selection, and successful note capture.
+- User confirmed uninstall preserved settings and vault notes.
+- This was a same-version reinstall. A true newer-version upgrade and timestamped
+  signing remain untested. Running-app protection with unsaved input was tested
+  previously; it was not separately reported in this self-signed test sequence.
