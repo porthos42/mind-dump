@@ -24,3 +24,6 @@ dotnet publish src\MindDump\MindDump.csproj -c Release -p:PublishProfile=win-x64
 ```
 
 The release publish output is an unpackaged, self-contained `win-x64` application.
+
+For the per-user Windows installer, repeatable build command, and upgrade/uninstall
+test checklist, see [installer/README.md](installer/README.md).
