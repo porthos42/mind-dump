@@ -58,8 +58,10 @@ Main/PR/manual runs only upload Actions artifacts; tag runs additionally create
 the draft. CI uses Windows 2025, the SDK selected by global.json, Inno Setup 7.1.1,
 and a pinned coverage tool. Hosted runner and dependency feeds can change; this
 is a repeatable procedure, not a claim of byte-for-byte reproducible binaries.
-The Inno Chocolatey package and all network restores require a first hosted run
-to validate availability. Action major versions are maintained references.
+CI downloads Inno Setup 7.1.1 x64 from its official GitHub release and checks its
+pinned SHA-256 digest before installation. The first hosted run found that
+Chocolatey did not carry the requested version; the direct-download correction
+still requires a successful hosted run. Action major versions are maintained references.
 
 Each build stages into a unique ignored `artifacts/release-<version>-<id>/`
 directory so a rerun cannot accidentally upload stale assets. SHA256SUMS.txt

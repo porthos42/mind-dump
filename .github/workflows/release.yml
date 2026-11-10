@@ -19,16 +19,27 @@ jobs:
         with:
           global-json-file: global.json
       - name: Install Inno Setup
+        id: inno
         shell: pwsh
         run: |
-          choco install innosetup --version=7.1.1 --yes --no-progress
-          if ($LASTEXITCODE -ne 0) { throw 'Inno Setup installation failed.' }
+          $installer = Join-Path $env:RUNNER_TEMP 'innosetup-7.1.1-x64.exe'
+          $directory = Join-Path $env:RUNNER_TEMP 'InnoSetup'
+          Invoke-WebRequest 'https://github.com/jrsoftware/issrc/releases/download/is-7_1_1/innosetup-7.1.1-x64.exe' -OutFile $installer
+          $expected = '8a5a6711c3766a6e5fb74f280ba0e3551e719ce94538d901fdbd1f8f9920b3f0'
+          if ((Get-FileHash $installer -Algorithm SHA256).Hash -ne $expected) { throw 'Inno Setup download checksum mismatch.' }
+          $arguments = @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SP-', '/CURRENTUSER', ('/DIR="{0}"' -f $directory))
+          $process = Start-Process -FilePath $installer -ArgumentList $arguments -WindowStyle Hidden -Wait -PassThru
+          if ($process.ExitCode -ne 0) { throw "Inno Setup installation failed: $($process.ExitCode)" }
+          $compiler = Join-Path $directory 'ISCC.exe'
+          if (-not (Test-Path -LiteralPath $compiler)) { throw 'Inno Setup compiler missing.' }
+          "compiler=$compiler" | Add-Content $env:GITHUB_OUTPUT
       - name: Build and validate assets
         id: release
         shell: pwsh
         env:
           RELEASE_TAG: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || '' }}
-        run: ./scripts/Build-Release.ps1 -ExpectedTag $env:RELEASE_TAG -Coverage
+          ISCC_PATH: ${{ steps.inno.outputs.compiler }}
+        run: ./scripts/Build-Release.ps1 -ExpectedTag $env:RELEASE_TAG -IsccPath $env:ISCC_PATH -Coverage
       - uses: actions/upload-artifact@v4
         with:
           name: windows-release
