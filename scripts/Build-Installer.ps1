@@ -109,6 +109,15 @@ try {
     & $IsccPath "/DAppVersion=$version" "/DPublishDir=$publish" "/DOutputDir=$output" @compilerSigning (Join-Path $repo 'installer/MindDump.iss') 2>&1 |
         Tee-Object -FilePath (Join-Path $output 'installer-build.log')
     if ($LASTEXITCODE -ne 0) { throw 'Inno Setup compilation failed.' }
+    $buildLog = Get-Content -LiteralPath (Join-Path $output 'installer-build.log') -Raw
+    $payloadFiles = @(Get-ChildItem -LiteralPath $publish -File -Recurse)
+    foreach ($payloadFile in $payloadFiles) {
+        if (-not $buildLog.Contains('Compressing: \\?\' + $payloadFile.FullName, [StringComparison]::OrdinalIgnoreCase) -and
+            -not $buildLog.Contains('Compressing: ' + $payloadFile.FullName, [StringComparison]::OrdinalIgnoreCase)) {
+            throw "Installer compiler did not report including: $($payloadFile.FullName)"
+        }
+    }
+    Write-Host "Verified installer inclusion of all $($payloadFiles.Count) published files."
     $installer = Join-Path $output "MindDump-$version-win-x64-Setup.exe"
     if (-not (Test-Path -LiteralPath $installer)) { throw 'Installer output missing.' }
     if ($SigningThumbprint) {

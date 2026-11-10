@@ -32,6 +32,9 @@ Outputs under `artifacts/installer-<version>/` are ignored by Git:
 - `installer-build.log` (compiler file inclusion log)
 - A unique `publish-...` directory containing the self-contained payload
 
+The build also fails if the compiler inclusion log does not list every published
+file, so missing runtime or resource payloads cannot pass unnoticed.
+
 Verify the checksum with `Get-FileHash <installer.exe> -Algorithm SHA256`.
 For a combined portable ZIP, installer and checksum build, use
 `scripts/Build-Release.ps1`; see [distribution](../docs/distribution.md) for
@@ -148,6 +151,25 @@ Keep the existing installation; do not uninstall before this test.
 
 Record actual results before pushing `v0.1.1`. Do not infer upgrade success
 from build validation or the earlier same-version reinstall.
+
+### Fresh local verification (2026-11-10)
+
+- Rebuilt unsigned 0.1.1 from checkout HEAD `8b9c3f8`, using SDK 10.0.400,
+  locally restored packages (`-NoRestore`), and Inno Setup 7.1.1.
+- Verified all 514 published files against the compiler inclusion log. The new
+  build-script inclusion check was executed against this completed build.
+- Confirmed nonempty `App.xbf`, `MainWindow.xbf`, `MindDump.pri`, `coreclr.dll`,
+  and `Microsoft.UI.Xaml.dll`; executable product version is
+  `0.1.1+8b9c3f86f4b5e58dd5afe40fedd904a7e9a22081`.
+- Rebuilt tests with zero warnings/errors; direct test execution passed 15/15.
+  Installer script parsing and `git diff --check` passed; artifacts are ignored.
+- Installer SHA-256:
+  `c1cd45715d1dbd7c65db0be2b4b91b8d72a944ad9b62a3e25463a4d243288ebb`.
+- The owner subsequently confirmed the manual installer checks were already
+  tested and passed. Windows process-query access is denied in the agent
+  sandbox; installation lifecycle results are owner-reported.
+- This local rebuild is retained for verification. The published release uses
+  the matched installer, portable ZIP, and checksums from the tag build.
 
 ### Reported upgrade results (2026-11-10)
 
