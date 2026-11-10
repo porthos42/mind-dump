@@ -33,4 +33,23 @@
   <ItemGroup>
     <ProjectReference Include="..\MindDump.Core\MindDump.Core.csproj" />
   </ItemGroup>
+  <Target Name="IncludeWinUIResourcesInPublish"
+          AfterTargets="ComputeFilesToPublish">
+    <ItemGroup>
+      <ResolvedFileToPublish Include="$(TargetDir)App.xbf">
+        <RelativePath>App.xbf</RelativePath>
+        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      </ResolvedFileToPublish>
+
+      <ResolvedFileToPublish Include="$(TargetDir)MainWindow.xbf">
+        <RelativePath>MainWindow.xbf</RelativePath>
+        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      </ResolvedFileToPublish>
+
+      <ResolvedFileToPublish Include="$(TargetDir)MindDump.pri">
+        <RelativePath>MindDump.pri</RelativePath>
+        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      </ResolvedFileToPublish>
+    </ItemGroup>
+  </Target>
 </Project>
