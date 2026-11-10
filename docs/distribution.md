@@ -2,6 +2,25 @@
 
 ## Local verification (2026-11-10)
 
+### 0.1.1 preparation
+
+- Version source is now `0.1.1`; release notes are in `releases/0.1.1.md`.
+- Local `Build-Release.ps1 -ExpectedTag v0.1.1 -NoRestore` passed: Release
+  build with zero warnings/errors, 15/15 tests, installer compilation,
+  executable version/resource checks, portable ZIP byte validation, and asset
+  checksums. A mismatched `v0.1.0` tag was rejected before building.
+- Online restore failed in this environment; local coverage was not collected.
+- The owner reports hosted run [42903746794](https://github.com/porthos42/mind-dump/actions/runs/42903746794)
+  passed at `b37f7ea`, including coverage and release asset generation.
+- The owner confirmed a true 0.1.0 to 0.1.1 upgrade passed on this PC,
+  including unsaved-draft protection, retained vault selection/notes, and new
+  capture. See [installer verification](../installer/README.md) for versions.
+- The tag-triggered draft job remains pending.
+- Local Git transport currently fails before connecting to GitHub. No 0.1.1
+  tag has been pushed and no 0.1.1 draft has been verified.
+
+### Earlier 0.1.0 local rehearsal
+
 - Phase 2 commit `3d7b318` confirmed on live GitHub main through connected read access.
   Git transport cannot reach GitHub here; local GitHub CLI tokens remain invalid.
 - Release solution build passed with zero warnings/errors; 15/15 tests passed
@@ -32,8 +51,8 @@ Keep updates manual for this phase. Do not migrate to MSIX solely to obtain sign
 
 `src/MindDump/MindDump.csproj` is the version source. Use a stable three-part
 version such as `0.1.1`; tags must be exactly `v0.1.1`. The installer, filenames,
-executable product version, and release title derive from it. No version bump is
-included in this phase. Do not move or recreate the existing `v0.1.0` tag.
+executable product version, and release title derive from it.
+Do not move or recreate the existing `v0.1.0` tag.
 
 1. Change Version and add `releases/<version>.md` with changes, requirements,
    unsigned/signed status, update instructions, and known limitations.
@@ -61,7 +80,8 @@ is a repeatable procedure, not a claim of byte-for-byte reproducible binaries.
 CI downloads Inno Setup 7.1.1 x64 from its official GitHub release and checks its
 pinned SHA-256 digest before installation. The first hosted run found that
 Chocolatey did not carry the requested version; the direct-download correction
-still requires a successful hosted run. Action major versions are maintained references.
+passed in hosted run 42903746794, as reported by the owner.
+Action major versions are maintained references.
 
 Each build stages into a unique ignored `artifacts/release-<version>-<id>/`
 directory so a rerun cannot accidentally upload stale assets. SHA256SUMS.txt

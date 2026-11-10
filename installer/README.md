@@ -19,7 +19,7 @@ pwsh -NoProfile -File scripts/Build-Installer.ps1 -IsccPath 'C:\Tools\Inno Setup
 ```
 
 The script reads `Version` from `src/MindDump/MindDump.csproj` (currently
-`0.1.0`), publishes to a fresh directory, validates the executable version and
+`0.1.1`), publishes to a fresh directory, validates the executable version and
 required WinUI/runtime files, then embeds the entire directory recursively.
 Update that one Version property to match the next release tag, without its `v`.
 The existing explicit XBF/PRI publish target must remain intact.
@@ -123,3 +123,41 @@ uninstall, or clean-machine runtime success. Record those results separately.
 - This was a same-version reinstall. A true newer-version upgrade and timestamped
   signing remain untested. Running-app protection with unsaved input was tested
   previously; it was not separately reported in this self-signed test sequence.
+
+## 0.1.0 to 0.1.1 upgrade checklist
+
+Status: steps 1 through 4 passed, as reported by the owner on 2026-11-10.
+The post-upgrade uninstall/reinstall check in step 5 remains pending.
+Keep the existing installation; do not uninstall before this test.
+
+1. Confirm Installed apps reports MindDump 0.1.0 and the installed
+   `%LOCALAPPDATA%\Programs\MindDump\MindDump.exe` reports product version 0.1.0.
+   Launch that installed copy, confirm the configured vault, and capture a
+   uniquely named pre-upgrade note. Back up settings.json and the vault notes
+   outside the installation directory.
+2. Leave a recognizable unsaved draft open. Run the 0.1.1 setup and confirm
+   it blocks, leaves MindDump running, and preserves the draft. Save/copy the
+   draft, exit through the tray, and retry setup without uninstalling 0.1.0.
+3. Confirm Installed apps has one MindDump entry at 0.1.1, the installed EXE
+   reports 0.1.1, and the existing Start menu/desktop shortcuts launch it.
+4. Confirm the vault selection and settings are retained, all previous notes
+   remain intact, and a new uniquely named post-upgrade capture succeeds.
+5. Exit and uninstall 0.1.1. Confirm app files/shortcuts/registration are removed
+   while settings and notes remain. Reinstall 0.1.1 and confirm retained settings
+   load and capture still works.
+
+Record actual results before pushing `v0.1.1`. Do not infer upgrade success
+from build validation or the earlier same-version reinstall.
+
+### Reported upgrade results (2026-11-10)
+
+- Installed baseline: `0.1.0+5b43ef4dae4e5777aca63e130ae62973e80e6e7f`.
+- Setup blocked with an unsaved draft open and preserved the draft.
+- After saving/copying the draft and tray Exit, setup upgraded the existing
+  installation without an uninstall.
+- Retained vault selection and old notes were confirmed; a new capture passed.
+- Installed result: `0.1.1+b37f7ea66b2f50979b21628a1c51f7675e0e5df2`.
+  This local test build used the version bump over the then-current HEAD;
+  the tag build will contain the eventual release commit identifier.
+- These results correspond to the five steps provided in chat. They do not
+  establish a new uninstall/reinstall test or all shortcut/registration checks.
